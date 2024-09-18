@@ -23,6 +23,8 @@ typedef struct Particle {
     doubleVector* veloc;
     intVector* img;
     double* timeStamp;
+    
+    // the diameter in code is diameterScale[iatom] * meandiameter.
     double *diameterScale, meanDiameter;
     
     //===just for future feature===
@@ -32,6 +34,11 @@ typedef struct Particle {
     //===just for future feature===
     
     int *id2tag, *tag2id;  // tag is the label, id is the index;
+    int sortFlag;          // increased when the index is reordered.
+
+    // The library MUST NOT rewrite isSortForbidden.
+    bool isSortForbidden;  // default: false. True: Never doing sorting and (label == index).
+    
     bool isSizeFixed;
     bool isSync;
 } Particle;
@@ -88,14 +95,14 @@ typedef struct NebrList {
 
 #define JammingZmin 1E12
 //#define NoseHoverChain 20
-typedef enum ReturnType {
-    TrivialReturn = 1 << 0,  // trivial Return;
+typedef enum ReturnType {// the state is synchronized except TrivialReturn.
+    TrivialReturn = 1 << 0,       // trivial Return;
     DensityReturn = 1 << 1,       // reaching target density;
     PressReturn = 1 << 2,         // reaching target pressure;
     JamReturn = 1 << 3,           // Jammed before reaching target density or Z;
     ThermoReturn = 1 << 4,        // return due to output cmd;
     ErrorReturn = 1 << 5,         // return due to error;
-    HaltReturn = 1 << 6,          // Halt running;
+    HaltReturn = 1 << 6,          // Halt running [currently trigered by SWAP];
 } ReturnType;
 
 typedef struct Update {
@@ -108,7 +115,6 @@ typedef struct Update {
     uptriMat sColVirialTensor;
     double accTimePeriod;//operated by calcPressure().
     int outputPeriod, nextOutputStep;
-    //double duringTime;
     bool Edone, Zdone, Tdone;
     
     NebrList nebrList;
@@ -128,7 +134,6 @@ typedef struct Update {
     // when colCnt == nAtom; do 0 -> colCnt and stepCol++;
     
     ReturnType rtype;
-    
     Toolkit toolkit;
 } Update;
 

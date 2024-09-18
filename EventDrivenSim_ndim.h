@@ -8,9 +8,11 @@ extern "C" {
 #endif
 
 typedef struct SimEDMD {
+    // performing velocity scaling thermostat whenever building event list.
     double rtimeStepReal;
 } SimEDMD;
 typedef struct ExpandEDMD {
+    // performing velocity scaling thermostat whenever building event list.
     double rrateSet;// \dot{X}/X = rrate; X: diameter or radius;
     
     bool isVolCtrl;
@@ -20,6 +22,7 @@ typedef struct ExpandEDMD {
 } ExpandEDMD;
 
 typedef struct NptIsoEDMD {
+    // performing velocity scaling thermostat every step.
     double predtStep;
     double rrate;
     bool zeroRate;

@@ -26,8 +26,8 @@
 
 // #define __triBox__
 // #define __orthBox__
-
 // #define DIM 3
+
 #define voigtDIM ((DIM * (DIM + 1) / 2))
 #define voigtSymMatDIM ((voigtDIM * (voigtDIM + 1) / 2))
 
@@ -39,13 +39,10 @@
     (pow(PI, ((double)(DIM)) / 2.0) / exp(lgamma(1 + ((double)(DIM)) / 2.0)))
 #endif
 
-#define DBL_EPSILON 2.2204460492503131E-016
-// smallestnumber such that 1.0+DBL_EPSILON!=1.0
+#define DBL_EPSILON 2.2204460492503131E-016 // smallest number such that 1.0+DBL_EPSILON!=1.0
 #define DBL_INF 1.0E20
-
 #define transPartner INT_MAX
 #define nebrPartner INT_MIN
-
 #define TolRatio 5E-15
 // if fabs(a - b) < TolRatio * a; then (a == b);
 // if fabs(a^2 - b^2) < 2*TolRatio * a; then (a == b).
@@ -133,6 +130,8 @@ typedef char *BitArr;
     {                                                                             \
         safeFprintf(stderr, "File: %s; Func: %s; Line: %d\n\tInfo: " format "\n", \
                     __FILE__, __func__, __LINE__, ##__VA_ARGS__);                 \
+        safeFprintf(logFile, "File: %s; Func: %s; Line: %d\n\tInfo: " format "\n", \
+                    __FILE__, __func__, __LINE__, ##__VA_ARGS__);                 \
     }
 #endif
 
@@ -205,34 +204,40 @@ typedef char *BitArr;
     })
 #endif
 
-// open existed file with read and write permission
+// open existed file with read and write permission;
+// if file isnot exist, this func will call createFileReadWrite(filePath);
+// moving ReadWrite Position to the end.
 #ifndef openExistFileReadWrite
 #define openExistFileReadWrite(filePath)                 \
-    ({                                                   \
-        if (filePath == NULL)                            \
-            Abort("No variable!");                       \
-        if (access(filePath, F_OK) != 0)                 \
-            Abort("No File %s!", filePath);              \
-        FILE *fp = fopen(filePath, "rb+");               \
-        if (fp == NULL)                                  \
-            Abort("Open File \"%s\" Failed!", filePath); \
-        fp;                                              \
-    })
+({                                                   \
+    if (filePath == NULL)                            \
+        Abort("No variable!");                       \
+    FILE *fp = NULL;                                 \
+    if (!isFileExisted(filePath)) {                  \
+        fp = createFileReadWrite(filePath);          \
+    } else {                                         \
+        fp = fopen(filePath, "rb+");                 \
+        fseek(fp, 0, SEEK_END);                      \
+    }                                                \
+    if (fp == NULL)                                  \
+        Abort("Open File \"%s\" Failed!", filePath); \
+    fp;                                              \
+})
 #endif
 
 // open existed file with read only permission
 #ifndef openExistFileReadOnly
 #define openExistFileReadOnly(filePath)              \
-    ({                                               \
-        if (filePath == NULL)                        \
-            Abort("No variable!");                   \
-        if (access(filePath, F_OK) != 0)             \
-            Abort("No File %s!", filePath);          \
-        FILE *fp = fopen(filePath, "r");             \
-        if (fp == NULL)                              \
-            Abort("Open File %s Failed!", filePath); \
-        fp;                                          \
-    })
+({                                               \
+    if (filePath == NULL)                        \
+        Abort("No variable!");                   \
+    if (access(filePath, F_OK) != 0)             \
+        Abort("No File %s!", filePath);          \
+    FILE *fp = fopen(filePath, "r");             \
+    if (fp == NULL)                              \
+        Abort("Open File %s Failed!", filePath); \
+    fp;                                          \
+})
 #endif
 
 #if defined(checkMacroFlag)
@@ -294,7 +299,16 @@ static int _sidx2voigt[DIM][DIM] = {{0, 2}, {2, 1}};
     })
 #endif
 
-typedef double uptriMat[voigtDIM];
+#define KronDelta(alpha, beta) ((alpha) == (beta) ? (1) : (0))
+
+#define SwapDoubleVectorPtr(ptrA, ptrB) \
+{                                   \
+    void *tmpPtr = (void *)ptrA;    \
+    ptrA = ptrB;                    \
+    ptrB = (doubleVector *)tmpPtr;  \
+}
+
+typedef double uptriMat[voigtDIM];  // up-trianglar part of symmetric matrix.
 // uptriMat[spaceIdx2voigt(alpha,beta)]: alpha_beta component of Matrix
 typedef double doubleVector[DIM];
 typedef doubleVector diagMat;
@@ -995,8 +1009,8 @@ typedef struct int2 {
 extern "C" {
 #endif
 
-double rndUniform(void);
-double rndStdNorm(void);
+double rndUniform(void);// random number in [0,1];
+double rndStdNorm(void);// random from N(0,1);
 bool isEmpty(char *str, int maxlen);
 
 typedef struct cmdArg {
@@ -1059,12 +1073,18 @@ void clearMinEventHeap(MinEventHeap *minHeap, int nAtom);
 #ifdef __Linux__
 void dumpSourceFile(void);
 #endif
+
 extern volatile int __nCatchSignal__; // number of catched signal (delivered by user).
 int setSignalHandler(void);
 
 // insitu sort
 void heapSortInc(int *arr, int len);
 int sortDoubleVector0Inc(doubleVector *base, int nVec); // sort doubleVector[0]
+
+void exchange_doubleVector(doubleVector *xyz, doubleVector *buffer, int *oid2nid, int nAtom);
+void exchange_intVector(intVector *img, intVector *buffer, int *oid2nid, int nAtom);
+void exchange_double(double *radius, double *buffer, int *oid2nid, int nAtom);
+void exchange_int(int *type, int *buffer, int *oid2nid, int nAtom);
 
 #ifdef __cplusplus
 }

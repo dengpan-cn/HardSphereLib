@@ -6,10 +6,10 @@
 
 FILE *logFile = NULL;
 int truncFileFlag = 0;        // 0:normal;1:truncate;2:restart
-int screenOutputReadConf = 0; // 0: not
+int screenOutputReadConf = 0; // 0: not; >= 10000: internal state;
 char *MSG = NULL;
 
-double rndUniform(void) {
+double rndUniform(void) {// random number belong to  U[0,1]
     static int setSeed = 1;
 
     static double *u;
@@ -81,7 +81,7 @@ double rndUniform(void) {
 
     return uni;
 }
-double rndStdNorm(void) {
+double rndStdNorm(void) {// random number belong to N(0,1)
     //====
     static bool genStdNorm = true;
     static double otherRndStd = 0;
@@ -444,3 +444,29 @@ int sortDoubleVector0Inc(doubleVector *base, int nVec) {
     qsort(base, nVec, sizeof(doubleVector), compareDoubleVector);
     return 1;
 }
+
+void exchange_doubleVector(doubleVector* xyz, doubleVector* buffer, int* oid2nid, int nAtom) {
+    for (int oid = 0; oid < nAtom; oid++) {
+        int nid = oid2nid[oid];
+        vCpy(buffer[nid], xyz[oid]);
+    }
+}
+void exchange_intVector(intVector* img, intVector* buffer, int* oid2nid, int nAtom) {
+    for (int oid = 0; oid < nAtom; oid++) {
+        int nid = oid2nid[oid];
+        vCpy(buffer[nid], img[oid]);
+    }
+}
+void exchange_double(double* radius, double* buffer, int* oid2nid, int nAtom) {
+    for (int oid = 0; oid < nAtom; oid++) {
+        int nid = oid2nid[oid];
+        buffer[nid] = radius[oid];
+    }
+}
+void exchange_int(int* type, int* buffer, int* oid2nid, int nAtom) {
+    for (int oid = 0; oid < nAtom; oid++) {
+        int nid = oid2nid[oid];
+        buffer[nid] = type[oid];
+    }
+}
+

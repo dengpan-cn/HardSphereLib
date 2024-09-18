@@ -1,33 +1,12 @@
 #include "EventDrivenSim_ndim.h"
 
 //=======Event List, Nebr List, do collision=======
-void exchange_doubleVector(doubleVector* xyz, doubleVector* buffer, int* oid2nid, int nAtom) {
-    for (int oid = 0; oid < nAtom; oid++) {
-        int nid = oid2nid[oid];
-        vCpy(buffer[nid], xyz[oid]);
-    }
-}
-void exchange_intVector(intVector* img, intVector* buffer, int* oid2nid, int nAtom) {
-    for (int oid = 0; oid < nAtom; oid++) {
-        int nid = oid2nid[oid];
-        vCpy(buffer[nid], img[oid]);
-    }
-}
-void exchange_double(double* radius, double* buffer, int* oid2nid, int nAtom) {
-    for (int oid = 0; oid < nAtom; oid++) {
-        int nid = oid2nid[oid];
-        buffer[nid] = radius[oid];
-    }
-}
-void exchange_int(int* type, int* buffer, int* oid2nid, int nAtom) {
-    for (int oid = 0; oid < nAtom; oid++) {
-        int nid = oid2nid[oid];
-        buffer[nid] = type[oid];
-    }
-}
 void sortParticle(Box* box, Particle* particle, Update* update) {
     if (!update->nebrList.doSort)
         return;
+    if (particle->isSortForbidden) {
+        return;
+    }
     
     adjustImg(box, particle);
     
@@ -1941,6 +1920,9 @@ SimEDMD* addSimEdmd(Box* box, Particle* particle, Update* update) {
     return 0;
 }
 ReturnType colForward_edmd(Box* box, Particle* particle, Update* update, double runTimeReal, int maxStep) {
+    // return if the following conditions are satisfied.
+    // 1. number of collisions (in units of step) is equal to maxStep or stepCol >= 10000.
+    // 2. the running time is equal to runTimeReal.
     SimEDMD* edmd = getSimEdmd(box, particle, update);
     if (!edmd)
         Abort("Call addSimEdmd().");
@@ -1974,14 +1956,12 @@ ReturnType colForward_edmd(Box* box, Particle* particle, Update* update, double 
         double dtimeReal = dtime / update->timeUnits;
         if (accRunTimeReal + dtimeReal >= irunTimeReal) {
             dtime = (irunTimeReal - accRunTimeReal) * update->timeUnits;
-            // update->duringTime += dtime;
             update->runtimeReal += (irunTimeReal - accRunTimeReal);
             update->currentStamp = data.eTime;
             update->accTimePeriod += dtime;
             
             break;
         } else {
-            // update->duringTime += dtime;
             update->runtimeReal += dtimeReal;
             update->currentStamp = data.eTime;
             update->accTimePeriod += dtime;
@@ -2038,12 +2018,18 @@ int delSimEdmd(Box* box, Particle* particle, Update* update) {
     syncAll(box, particle, update);
     if (!getSimEdmd(box, particle, update))
         return -1;
+    calcKinTensor(box, particle, update);
+    calcPoten(box, particle, update);
+    calcPressure(box, particle, update);
     
     safeFprintf(stderr, "ColCnt: %lld (step: %d); InaccurateCnt: %lld (%g %%)\n",
                 (long long int)(update->colCnt + update->stepCol * particle->nAtom),
                 update->stepCol, (long long int)(update->errCnt + update->stepErr * particle->nAtom),
                 (double)(update->errCnt + update->stepErr * particle->nAtom) / (double)(update->colCnt + update->stepCol * particle->nAtom) * 100.0);
     
+    update->errCnt = update->colCnt = update->stepCol = update->stepErr = 0;
+    update->runtimeReal = 0;
+    update->nextTtstep = update->nextZCstep = update->nextZMstep = 0;
     delToolkit(&update->toolkit, "__SimRun_EDMD__");
     
     return 0;
@@ -2315,13 +2301,21 @@ int delExpandEdmd(Box* box, Particle* particle, Update* update) {
     syncAll(box, particle, update);
     if (!getExpandEdmd(box, particle, update))
         return -1;
+    
+    calcKinTensor(box, particle, update);
+    calcPoten(box, particle, update);
+    calcPressure(box, particle, update);
+    
     safeFprintf(stderr, "ColCnt: %lld (step: %d); InaccurateCnt: %lld (%g %%)\n",
                 (long long int)(update->colCnt + update->stepCol * particle->nAtom),
                 update->stepCol, (long long int)(update->errCnt + update->stepErr * particle->nAtom),
                 (double)(update->errCnt + update->stepErr * particle->nAtom) / (double)(update->colCnt + update->stepCol * particle->nAtom) * 100.0);
-    delToolkit(&update->toolkit, "__SimRun_ExpandEDMD__");
     
+    update->errCnt = update->colCnt = update->stepCol = update->stepErr = 0;
+    update->runtimeReal = 0;
+    update->nextTtstep = update->nextZCstep = update->nextZMstep = 0;
     update->rrateSet = 0;
+    delToolkit(&update->toolkit, "__SimRun_ExpandEDMD__");
     
     return 0;
 }
@@ -2686,11 +2680,19 @@ int delNptEdmd(Box* box, Particle* particle, Update* update) {
     if (!getNptEdmd(box, particle, update))
         return -1;
     
+    calcKinTensor(box, particle, update);
+    calcPoten(box, particle, update);
+    calcPressure(box, particle, update);
+    
     safeFprintf(stderr, "ColCnt: %lld (step: %d); InaccurateCnt: %lld (%g %%)\n",
                 (long long int)(update->colCnt + update->stepCol * particle->nAtom),
                 update->stepCol, (long long int)(update->errCnt + update->stepErr * particle->nAtom),
                 (double)(update->errCnt + update->stepErr * particle->nAtom) / (double)(update->colCnt + update->stepCol * particle->nAtom) * 100.0);
     
+    update->errCnt = update->colCnt = update->stepCol = update->stepErr = 0;
+    update->runtimeReal = 0;
+    update->nextTtstep = update->nextZCstep = update->nextZMstep = 0;
+    update->rrateSet = 0;
     delToolkit(&update->toolkit, "__SimRun_NptIsoEDMD__");
     
     return 0;

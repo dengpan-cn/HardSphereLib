@@ -23,6 +23,7 @@ void readCmdLineVar(Variable *var, int argc, char const *argv[]) {
             truncFileFlag = 2;
         } else if (!strcmp(argv[iarg], "--cite")) {
             nocite = false;
+            screenOutputReadConf += 10000;
         } else if (!strcmp(argv[iarg], "--dumpSourceFile")) {
 #ifdef __Linux__
             dumpSourceFile();
@@ -45,6 +46,7 @@ void readCmdLineVar(Variable *var, int argc, char const *argv[]) {
 #endif
             safeFprintf(logFile, "\tDIM: %d\n", DIM);
             safeFprintf(logFile, "\tdumpFileRevNum: %d\n", dumpFileRevNum);
+            safeFprintf(logFile, "\tInteraction between particles: Hard Sphere.\n");
             
             char *ptr = getcwd(NULL, 0);
             safeFprintf(logFile, "\tRunning path: %s\n", ptr);
@@ -175,6 +177,7 @@ void readCmdLineVar(Variable *var, int argc, char const *argv[]) {
 #endif
         safeFprintf(logFile, "\tDIM: %d\n", DIM);
         safeFprintf(logFile, "\tdumpFileRevNum: %d\n", dumpFileRevNum);
+        safeFprintf(logFile, "\tInteraction between particles: Hard Sphere.\n");
         
         safeFprintf(logFile, "Info at running time:\n");
         safeFprintf(logFile, "\tProg. Name: %s\n", argv[0]);
@@ -412,7 +415,11 @@ void readConf(Box *box, Particle *particle, Update *update, Variable *var) {
     
     cmd = findVariable(var, "zero");
     if (!cmd) {
-        Info("--zero ZMperiod ZCperiod; default --zero 1e3 1e4");
+        Info("--zero ZMperiod ZCperiod;\n"
+             "\tPerforming zero total momentum every ZMperiod step.\n"
+             "\tMoving center of mass to origin every ZCperiod step.\n"
+             "\tNegative value means Never performing these two action.\n"
+             "\tdefault: --zero 1e3 1e4.");
         update->ZMperiod = 1000;
         update->ZCperiod = 10000;
     } else {
@@ -456,7 +463,11 @@ void readConf(Box *box, Particle *particle, Update *update, Variable *var) {
             }
             printf("\n");
         }
+        printf("Interaction between particles: Hard Sphere.\n");
         printf("===========System Info==========\n");
+        
+        if (screenOutputReadConf >= 10000)
+            screenOutputReadConf -= 10000;
     }
 }
 
@@ -734,7 +745,6 @@ void syncAll(Box *box, Particle *particle, Update *update) {
     update->currentStamp = 0.0;
     particle->isSync = true;
     update->eventList.isValid = false;
-    // update->duringTime = 0.0;
 }
 void adjustImg(Box *box, Particle *particle) {
     if (!particle->isSync)
@@ -873,6 +883,9 @@ void thermostat(Box *box, Particle *particle, Update *update) {
     update->eventList.isValid = false;
 }
 void zeroMomentum(Box *box, Particle *particle, Update *update) {
+    if (update->ZMperiod < 0) {
+        return;
+    }
     syncAll(box, particle, update);
     
     doubleVector sV;
@@ -892,6 +905,9 @@ void zeroMomentum(Box *box, Particle *particle, Update *update) {
     update->eventList.isValid = false;
 }
 void moveBarycenter(Box *box, Particle *particle, Update *update) {
+    if (update->ZCperiod < 0) {
+        return;
+    }
     syncAll(box, particle, update);
     
     doubleVector sCent;
@@ -985,7 +1001,7 @@ int checkOverlap(Box *box, Particle *particle, Update *update) {
             particle->meanDiameter * 0.5;
             double rij = sNorm(dRij);
             if (rij <= sRc - 10.0 * DBL_EPSILON) {
-                printf("overlap: %d %d: %g %g => %10.8lf%%\n", iatom, jatom, rij, sRc,
+                safeFprintf(stderr, "overlap: %d %d: %g %g => %10.8lf%%\n", iatom, jatom, rij, sRc,
                        (rij - sRc) / sRc * 100.0);
                 return -1;
             }
@@ -1018,8 +1034,7 @@ writeDumpFile *addWriteDumpFile(Box *box, Particle *particle, Update *update, Va
     
     char fname[4096];
     if (cmd->cmdArgc == 1) {
-        sprintf(fname, "%s/dump_%s_%s.bin", var->cwd, cmd->cmdArgv[0],
-                var->sf);
+        sprintf(fname, "%s/dump_%s_%s.bin", var->cwd, cmd->cmdArgv[0], var->sf);
     } else {
         sprintf(fname, "%s/dump_%s.bin", var->cwd, var->sf);
     }
@@ -1100,7 +1115,8 @@ int writeDump(Box *box, Particle *particle, Update *update) {
         safeFwrite(wdf->fdump, &particle->nAtom, sizeof(int), 1);
         safeFwrite(wdf->fdump, &box->boxH, sizeof(uptriMat), 1);
         safeFwrite(wdf->fdump, &particle->meanDiameter, sizeof(double), 1);
-        safeFwrite(wdf->fdump, &update->runtimeReal, sizeof(double), 1);
+        double timestep = update->stepCol + (double)update->colCnt/(double)particle->nAtom;
+        safeFwrite(wdf->fdump, &timestep, sizeof(double), 1);
         for (int iatom = 0; iatom < particle->nAtom; iatom++) {
             int idx = particle->tag2id[iatom];
             doubleVector uxyz;
@@ -1119,7 +1135,8 @@ int writeDump(Box *box, Particle *particle, Update *update) {
         } else {
             safeFwrite(wdf->fdump, &particle->meanDiameter, sizeof(double), 1);
         }
-        safeFwrite(wdf->fdump, &update->runtimeReal, sizeof(double), 1);
+        double timestep = update->stepCol + (double)update->colCnt/(double)particle->nAtom;
+        safeFwrite(wdf->fdump, &timestep, sizeof(double), 1);
         
         for (int iatom = 0; iatom < particle->nAtom; iatom++) {
             int idx = particle->tag2id[iatom];
@@ -1232,6 +1249,9 @@ int readSimInfo(Box *box, Particle *particle, Update *update, mmapBinFile *binFi
     return readDump(box, particle, update, binFile, 0);
 }
 int readDump(Box *box, Particle *particle, Update *update, mmapBinFile *binFile, int whichStep) {
+    if (whichStep == -1) {
+        whichStep = binFile->nStep - 1;
+    }
     if (whichStep >= binFile->nStep || whichStep < 0) {
         Abort("Step %d is out of Range: [0,%d];", whichStep, binFile->nStep - 1);
     }
@@ -1295,7 +1315,9 @@ int readDump(Box *box, Particle *particle, Update *update, mmapBinFile *binFile,
         data = ((char *)data + sizeof(double));
         update->runtimeReal = 0.0;
         if (binFile->revNum == 2) {
-            update->runtimeReal = *((double *)data);
+            double timestep = *((double *)data);
+            update->stepCol = (int)floor(timestep);
+            update->colCnt = (int)round((timestep - update->stepCol)*particle->nAtom);
             data = ((char *)data + sizeof(double));
         }
         memcpy(particle->pos, data, particle->nAtom * sizeof(doubleVector));
@@ -1634,7 +1656,7 @@ int delSwap(Update *update) {
         return -1;
     
     double ratio = (double)swap->naccept / (double)swap->ntrial;
-    printf("# of trial move: %lld and %lld is accept (%g);\n", swap->ntrial, swap->naccept, ratio);
+    safeFprintf(stderr, "# of trial move: %lld and %lld is accept (%g);\n", swap->ntrial, swap->naccept, ratio);
     
     safeFree(swap->xyz0);
     safeFree(swap->binHead);
