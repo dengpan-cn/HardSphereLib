@@ -4,9 +4,11 @@
 void sortParticle(Box* box, Particle* particle, Update* update) {
     if (!update->nebrList.doSort)
         return;
-    if (particle->isSortForbidden) {
+    if (particle->__isSortForbidden) {
         return;
     }
+    
+    particle->sortFlag++;
     
     adjustImg(box, particle);
     

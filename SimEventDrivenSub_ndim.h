@@ -16,6 +16,13 @@ void readConf(Box* box, Particle* particle, Update* update, Variable* var);
 void writeConf(Box* box, Particle* particle, Update* update, Variable* var);
 int emergWriteConfHalt(Box* box, Particle* particle, Update* update, char* fname);//write configurations then halt.
 
+// turn on/off memory reordering.
+// Memory reordering (sorting) is performed at the fisrt time of builing neighbour list and every 200 times of neighbour list rebuilding.
+// The sorting is performed when building neighbour list.
+int turnOffMemSort(Box *box, Particle *particle, Update *update);// Abort if failed!
+int turnOnMemSort(Box *box, Particle *particle, Update *update);// Abort if failed!
+int checkMemSortFlag(Box *box, Particle *particle, Update *update);// Abort if failed!
+
 //=======box deformation========
 void setBoxPara(Box* box);
 void calcBoxLenAngle(Box* box, uptriMat para);

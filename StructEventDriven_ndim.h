@@ -33,14 +33,15 @@ typedef struct Particle {
     double* massPerType;
     //===just for future feature===
     
-    int *id2tag, *tag2id;  // tag is the label, id is the index;
-    int sortFlag;          // increased when the index is reordered.
+    //========Memory Reording=======
+    int *id2tag, *tag2id;// tag is the permanent label (id2tag[id]), id is the memory index (tag2id[tag]);
+    int sortFlag;//increased whenever the index is reordered.
 
-    // The library MUST NOT rewrite isSortForbidden.
-    bool isSortForbidden;  // default: false. True: Never doing sorting and (label == index).
-    
     bool isSizeFixed;
     bool isSync;
+    
+    //========internal Flag=======
+    bool __isSortForbidden; //default: false. True: Never doing sorting and (label == index).
 } Particle;
 
 #define __minSkinSet__ 5E-2

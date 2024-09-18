@@ -624,6 +624,36 @@ int emergWriteConfHalt(Box *box, Particle *particle, Update *update, char *fname
     return 0;
 }
 
+int checkMemSortFlag(Box *box, Particle *particle, Update *update){
+    if (!particle->__isSortForbidden) {
+        return 1;
+    }
+    if (particle->nAtom == 0) {
+        return 0;
+    }
+    
+    for (int iatom = 0; iatom < particle->nAtom; iatom++) {
+        if (particle->tag2id[iatom] != iatom) {
+            Abort("Abort due to wrong __isSortForbidden.")
+        }
+    }
+    
+    return 1;
+}
+int turnOnMemSort(Box *box, Particle *particle, Update *update){
+    checkMemSortFlag(box, particle, update);
+    
+    particle->__isSortForbidden = false;
+    
+    return 1;
+}
+int turnOffMemSort(Box *box, Particle *particle, Update *update){
+    particle->__isSortForbidden = true;
+    checkMemSortFlag(box, particle, update);
+    
+    return 1;
+}
+
 //===============================================================================
 void setBoxPara(Box *box) {
     box->dim = DIM;
