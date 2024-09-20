@@ -2327,7 +2327,7 @@ double estimateRate(Box* box, Particle* particle, Update* update, NptIsoEDMD* np
     // update units of momentum;
     double boxWg = particle->nAtom * pow(nptiso->tauZ * update->timeUnits, 2);
     double boxPg = 0;
-    int nStep = 5;
+    int nStep = 10.0;
     double dt = nptiso->predtStep / nStep;
     double alpha = dt / (nptiso->tauZ * update->timeUnits);
     double sigma = sqrt(2.0 * alpha / boxWg);
@@ -2340,8 +2340,11 @@ double estimateRate(Box* box, Particle* particle, Update* update, NptIsoEDMD* np
     }
     
     // expand particles
-    double scaleLen = exp(boxPg * nptiso->predtStep);
-    double rrate = (1.0 - scaleLen) / (scaleLen * nptiso->predtStep);
+    double rrate = (exp(-boxPg * nptiso->predtStep) - 1.0) / nptiso->predtStep;
+    if (isinf(rrate)) {
+        //Info("Warning! rrate: %g.", rrate,boxPg,nptiso->predtStep);
+        rrate = (boxPg > 0 ? -__maxRrate__ : __maxRrate__) / update->timeUnits;
+    }
     update->rrateSet = rrate * update->timeUnits;
     if (fabs(rrate) < __rrateThreshold__ / update->timeUnits) {
         rrate = 0.0;
@@ -2351,8 +2354,6 @@ double estimateRate(Box* box, Particle* particle, Update* update, NptIsoEDMD* np
         rrate = rrate / fabs(rrate) * __maxRrate__ / update->timeUnits;
         update->rrateSet = rrate * update->timeUnits;
     }
-    
-    // safeFprintf(fp, "%g %g\n", boxWg * pow(boxPg, 2), update->rrateSet);
     
     update->eventList.isValid = false;
     return rrate;
